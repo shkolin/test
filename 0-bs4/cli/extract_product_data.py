@@ -32,7 +32,7 @@ headers = {
 
 
 @dataclass
-class Product:
+class ProductData:
     title: str | None = None
     color: str | None = None
     ssd: str | None = None
@@ -66,12 +66,73 @@ def clean_value(value: str) -> str:
     return value.strip()
 
 
+def init_django_project() -> None:
+    import django
+    import os
+    import sys
+
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_project.settings')
+    django.setup()
+
+
+def save_product(data: ProductData) -> None:
+    init_django_project()
+    from django.db import DatabaseError
+    from django.db import transaction
+    from products.models import Characteristic
+    from products.models import CharacteristicGroup
+    from products.models import Product
+    from products.models import ProductImage
+
+    try:
+        with transaction.atomic():
+            product, _ = Product.objects.update_or_create(
+                **{
+                    'title': data.title,
+                    'color': data.code,
+                    'ssd': data.ssd,
+                    'manufacturer': data.manufacturer,
+                    'price': data.price,
+                    'promo_price': data.promo_price,
+                    'code': data.code,
+                    'num_reviews': data.num_reviews,
+                    'screen_diagonal': data.screen_diagonal,
+                    'resolution': data.resolution,
+                }
+            )
+
+            product.images.all().delete()
+
+            ProductImage.objects.bulk_create(
+                [
+                    ProductImage(
+                        product=product,
+                        url=image_url,
+                    )
+                    for image_url in data.images
+                ]
+            )
+
+            for group_name, characteristics in data.characteristics.items():
+                group, _ = CharacteristicGroup.objects.get_or_create(name=group_name)
+                for char_name, char_value in characteristics.items():
+                    Characteristic.objects.get_or_create(
+                        group=group,
+                        product=product,
+                        name=char_name,
+                        value=char_value,
+                    )
+    except DatabaseError as e:
+        print(f'Failed to save product: {e}\n')
+
+
 def main() -> None:
     html_doc = get_page(URL)
     soup = BeautifulSoup(html_doc, 'lxml')
     char_section = soup.find('div', attrs={'data-section': 'characteristics'})
 
-    product = Product()
+    product = ProductData()
 
     try:
         product.title = soup.find('div', attrs={'data-section': 'top'}).find('h1').text.strip()
@@ -158,6 +219,8 @@ def main() -> None:
                 product.characteristics[title][char_name.text.strip()] = clean_value(char_value.text)
     except AttributeError:
         pass
+
+    save_product(product)
 
     pprint(asdict(product), width=119)
 
