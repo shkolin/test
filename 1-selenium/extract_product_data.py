@@ -1,8 +1,15 @@
 import re
+from bs4 import BeautifulSoup
+from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
+from pprint import pprint
 from selenium import webdriver
+from selenium.common import ElementNotInteractableException
+from selenium.common import TimeoutException
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.wait import WebDriverWait
 from typing import Any
 
 SITE_URL = 'https://brain.com.ua/ukr/'
@@ -39,7 +46,22 @@ def clean_value(value: str) -> str:
     return value.strip()
 
 
-def main() -> None:
+def click_element_safely(driver, xpath):
+    try:
+        element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, xpath)))
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+        WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, xpath)))
+        try:
+            element.click()
+        except ElementNotInteractableException:
+            driver.execute_script('arguments[0].click();', element)
+    except TimeoutException:
+        print('Not found element or not clickable')
+    except Exception as e:
+        print(f'Error: {e}')
+
+
+def get_page_content() -> str:
     driver = webdriver.Firefox()
     driver.get(SITE_URL)
     search_input = driver.find_element(
@@ -50,7 +72,107 @@ def main() -> None:
         By.XPATH, "//div[@class='header-bottom-in']//input[@class='search-button-first-form']"
     )
     search_button.click()
+    click_element_safely(driver, "(//div[@class='tab-content-wrapper']//div[@class='br-pp-imadds'])[1]//a")
+    page_souce = driver.page_source
     driver.quit()
+    return page_souce
+
+
+def main() -> None:
+    html_doc = get_page_content()
+    soup = BeautifulSoup(html_doc, 'lxml')
+    char_section = soup.find('div', attrs={'data-section': 'characteristics'})
+
+    product = ProductData()
+
+    try:
+        # //div[@data-section='top']/h1
+        product.title = soup.find('div', attrs={'data-section': 'top'}).find('h1').text.strip()
+    except AttributeError:
+        pass
+
+    try:
+        product.color = get_char_value(char_section, 'Фізичні характеристики', 'Колір')
+    except AttributeError:
+        pass
+
+    try:
+        product.ssd = get_char_value(char_section, "Функції пам'яті", "Вбудована пам'ять")
+    except AttributeError:
+        pass
+
+    try:
+        product.manufacturer = get_char_value(char_section, 'Інші', 'Виробник')
+    except AttributeError:
+        pass
+
+    try:
+        # //div[@class='br-pr-price main-price-block']//div[@class='price-wrapper']/span
+        product.price = int(
+            soup.find('div', class_='br-pr-price main-price-block')
+            .find('div', class_='price-wrapper')
+            .find('span')
+            .text.strip()
+            .replace(' ', '')
+        )
+    except AttributeError:
+        pass
+
+    try:
+        # //div[@class='product-block-bottom']//img
+        images = soup.find('div', class_='product-block-bottom').find_all('img')
+        product.images = [img.get('src') for img in images]  # TODO: select only large size
+    except AttributeError:
+        pass
+
+    try:
+        # //div[@data-section='top']//div[@id='product_code']//span[@class='br-pr-code-val']
+        product.code = (
+            soup.find('div', attrs={'data-section': 'top'})
+            .find('div', id='product_code')
+            .find('span', class_='br-pr-code-val')
+            .text.strip()
+        )
+    except AttributeError:
+        pass
+
+    try:
+        # //div[@id='fast-navigation-block-static']//a[@class='scroll-to-element reviews-count']/span
+        product.num_reviews = int(
+            soup.find('div', id='fast-navigation-block-static')
+            .find('a', class_='scroll-to-element reviews-count')
+            .find('span')
+            .text.strip()
+        )
+    except AttributeError:
+        pass
+
+    try:
+        product.screen_diagonal = float(
+            str(get_char_value(char_section, 'Дисплей', 'Діагональ екрану')).replace('"', '')
+        )
+    except AttributeError:
+        pass
+
+    try:
+        product.resolution = str(get_char_value(char_section, 'Дисплей', 'Роздільна здатність екрану')).replace(
+            ' ', ''
+        )  # TODO: maybe separate to list integers: [int, int]
+    except AttributeError:
+        pass
+
+    try:
+        for item in char_section.find_all('div', class_='br-pr-chr-item'):
+            title = item.find('h3').text.strip()
+            product.characteristics[title] = {}
+            chars = item.find('div').find_all('div')
+            for char in chars:
+                char_name, char_value = char.find_all('span')
+                product.characteristics[title][char_name.text.strip()] = clean_value(char_value.text)
+    except AttributeError:
+        pass
+
+    pprint(asdict(product), width=119)
 
 
 if __name__ == '__main__':

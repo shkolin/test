@@ -47,7 +47,7 @@ class ProductData:
     characteristics: dict = field(default_factory=dict)
 
 
-def get_page(url: str) -> str:
+def get_page_content(url: str) -> str:
     response = requests.get(url, headers=headers)
     return response.text
 
@@ -128,7 +128,7 @@ def save_product(data: ProductData) -> None:
 
 
 def main() -> None:
-    html_doc = get_page(URL)
+    html_doc = get_page_content(URL)
     soup = BeautifulSoup(html_doc, 'lxml')
     char_section = soup.find('div', attrs={'data-section': 'characteristics'})
 
