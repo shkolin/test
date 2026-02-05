@@ -1,4 +1,5 @@
 import re
+import time
 from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
@@ -66,6 +67,13 @@ def click_element_safely(driver: Firefox, xpath: str) -> None:
 def get_page_content() -> str:
     driver = webdriver.Firefox()
     driver.get(SITE_URL)
+
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located(
+            (By.XPATH, "//div[@class='header-bottom-in']//input[@class='quick-search-input']")
+        )
+    )
+
     search_input = driver.find_element(
         By.XPATH, "//div[@class='header-bottom-in']//input[@class='quick-search-input']"
     )
@@ -74,10 +82,19 @@ def get_page_content() -> str:
         By.XPATH, "//div[@class='header-bottom-in']//input[@class='search-button-first-form']"
     )
     search_button.click()
+
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located(
+            (By.XPATH, "(//div[@class='tab-content-wrapper']//div[@class='br-pp-imadds'])[1]//a")
+        )
+    )
+
     click_element_safely(driver, "(//div[@class='tab-content-wrapper']//div[@class='br-pp-imadds'])[1]//a")
-    page_souce = driver.page_source
+
+    time.sleep(3)
+    page_source = driver.page_source
     driver.quit()
-    return page_souce
+    return page_source
 
 
 def main() -> None:
