@@ -1,16 +1,18 @@
 import re
-from bs4 import BeautifulSoup
 from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
 from pprint import pprint
+from typing import Any
+
+from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common import ElementNotInteractableException
 from selenium.common import TimeoutException
+from selenium.webdriver import Firefox
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-from typing import Any
 
 SITE_URL = 'https://brain.com.ua/ukr/'
 SEARCH_QUERY = 'Apple iPhone 15 128GB Black'
@@ -46,7 +48,7 @@ def clean_value(value: str) -> str:
     return value.strip()
 
 
-def click_element_safely(driver, xpath):
+def click_element_safely(driver: Firefox, xpath: str) -> None:
     try:
         element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, xpath)))
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)

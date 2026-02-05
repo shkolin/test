@@ -6,4 +6,4 @@ quote-style = "single"
 
 [tool.ruff.lint.isort]
 force-single-line = true
-default-section = "standard-library"
+# default-section = "standard-library"

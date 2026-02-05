@@ -1,11 +1,12 @@
 import re
-import requests
-from bs4 import BeautifulSoup
 from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
 from pprint import pprint
 from typing import Any
+
+import requests
+from bs4 import BeautifulSoup
 
 URL = 'https://brain.com.ua/ukr/Mobilniy_telefon_Apple_iPhone_16_Pro_Max_256GB_Black_Titanium-p1145443.html'
 
@@ -67,9 +68,10 @@ def clean_value(value: str) -> str:
 
 
 def init_django_project() -> None:
-    import django
     import os
     import sys
+
+    import django
 
     sys.path.append(os.path.join(os.path.dirname(__file__), 'www'))
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_project.settings')
@@ -80,10 +82,10 @@ def save_product(data: ProductData) -> None:
     init_django_project()
     from django.db import DatabaseError
     from django.db import transaction
-    from products.models import Characteristic
-    from products.models import CharacteristicGroup
-    from products.models import Product
-    from products.models import ProductImage
+    from products.models import Characteristic  # type: ignore
+    from products.models import CharacteristicGroup  # type: ignore
+    from products.models import Product  # type: ignore
+    from products.models import ProductImage  # type: ignore
 
     try:
         with transaction.atomic():
