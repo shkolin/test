@@ -52,7 +52,7 @@ class Characteristic(models.Model):
     name = models.CharField()
     value = models.CharField()
 
-    def __str(self):
+    def __str__(self):
         return '%s: %s' % (self.name, self.value)
 
     class Meta:

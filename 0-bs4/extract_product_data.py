@@ -71,7 +71,7 @@ def init_django_project() -> None:
     import os
     import sys
 
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+    sys.path.append(os.path.join(os.path.dirname(__file__), 'www'))
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_project.settings')
     django.setup()
 
