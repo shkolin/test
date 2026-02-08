@@ -70,6 +70,7 @@ def __save_characteristics(product: Product, characteristics: dict) -> None:
             attribute, _ = Attribute.objects.get_or_create(group=group, name=attr_name)
             values.append(AttributeValue(attribute=attribute, product=product, value=attr_value))
 
+    AttributeValue.objects.filter(product=product).delete()
     AttributeValue.objects.bulk_create(values)
 
 
