@@ -25,8 +25,8 @@ SEARCH_QUERY = 'Apple iPhone 15 128GB Black'
 
 def get_char_value(tag: WebElement, section_name: str, char_name: str) -> str | None:
     if char_header := tag.find_element(By.XPATH, f'//h3[text()="{section_name}"]'):
-        if color_label := char_header.find_element(By.XPATH, f'./following-sibling::div//span[text()="{char_name}"]'):
-            parent_div = color_label.find_element(By.XPATH, './..')
+        if attr_name := char_header.find_element(By.XPATH, f'./following-sibling::div//span[text()="{char_name}"]'):
+            parent_div = attr_name.find_element(By.XPATH, './..')
             spans = parent_div.find_elements(By.TAG_NAME, 'span')
             if value := spans[1].get_attribute('textContent'):
                 return value.strip()
@@ -113,10 +113,15 @@ def main() -> None:
             pass
 
         try:
-            if price := browser.find_element(
+            if prices := browser.find_elements(
                 By.XPATH, "//div[@class='br-pr-price main-price-block']//div[@class='price-wrapper']/span"
-            ).get_attribute('textContent'):
-                product.price = int(price.strip().replace(' ', ''))
+            ):
+                if len(prices) > 0:
+                    if price := prices[0].get_attribute('textContent'):
+                        product.price = int(price.strip().replace(' ', ''))
+                if len(prices) > 1:
+                    if promo_price := prices[1].get_attribute('textContent'):
+                        product.promo_price = int(promo_price.strip().replace(' ', ''))
         except NoSuchElementException:
             pass
 

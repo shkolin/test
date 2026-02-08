@@ -36,8 +36,8 @@ def get_page_content(url: str) -> str:
 
 def get_char_value(tag: Any, section_name: str, char_name: str) -> str | None:
     if char_header := tag.find('h3', string=section_name):
-        if color_label := char_header.parent.find('span', string=char_name):
-            return color_label.parent.find_all('span')[1].text.strip()
+        if attr_name := char_header.parent.find('span', string=char_name):
+            return attr_name.parent.find_all('span')[1].text.strip()
     return None
 
 
@@ -49,6 +49,7 @@ def main() -> None:
     product = ProductData()
 
     try:
+        # div[@data-section='top']//h1
         product.title = soup.find('div', attrs={'data-section': 'top'}).find('h1').text.strip()
     except AttributeError:
         pass
