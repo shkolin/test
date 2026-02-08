@@ -1,14 +1,17 @@
 import time
+from contextlib import contextmanager
 from dataclasses import asdict
 from pprint import pprint
-from typing import Any
+from typing import Generator
 
-from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common import ElementNotInteractableException
+from selenium.common import NoSuchElementException
 from selenium.common import TimeoutException
 from selenium.webdriver import Firefox
 from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.webdriver import WebDriver
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
@@ -20,10 +23,13 @@ SITE_URL = 'https://brain.com.ua/ukr/'
 SEARCH_QUERY = 'Apple iPhone 15 128GB Black'
 
 
-def get_char_value(tag: Any, section_name: str, char_name: str) -> str | None:
-    if char_header := tag.find('h3', string=section_name):
-        if color_label := char_header.parent.find('span', string=char_name):
-            return color_label.parent.find_all('span')[1].text.strip()
+def get_char_value(tag: WebElement, section_name: str, char_name: str) -> str | None:
+    if char_header := tag.find_element(By.XPATH, f'//h3[text()="{section_name}"]'):
+        if color_label := char_header.find_element(By.XPATH, f'./following-sibling::div//span[text()="{char_name}"]'):
+            parent_div = color_label.find_element(By.XPATH, './..')
+            spans = parent_div.find_elements(By.TAG_NAME, 'span')
+            if value := spans[1].get_attribute('textContent'):
+                return value.strip()
     return None
 
 
@@ -42,132 +48,130 @@ def click_element_safely(driver: Firefox, xpath: str) -> None:
         print(f'Error: {e}')
 
 
-def get_page_content() -> str:
+@contextmanager
+def get_page_content() -> Generator[WebDriver]:
     driver = webdriver.Firefox()
     driver.get(SITE_URL)
-
-    WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located(
-            (By.XPATH, "//div[@class='header-bottom-in']//input[@class='quick-search-input']")
+    try:
+        search_input = driver.find_element(
+            By.XPATH, "//div[@class='header-bottom-in']//input[@class='quick-search-input']"
         )
-    )
-
-    search_input = driver.find_element(
-        By.XPATH, "//div[@class='header-bottom-in']//input[@class='quick-search-input']"
-    )
-    search_input.send_keys(SEARCH_QUERY)
-    search_button = driver.find_element(
-        By.XPATH, "//div[@class='header-bottom-in']//input[@class='search-button-first-form']"
-    )
-    search_button.click()
-
-    WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located(
-            (By.XPATH, "(//div[@class='tab-content-wrapper']//div[@class='br-pp-imadds'])[1]//a")
+        search_input.send_keys(SEARCH_QUERY)
+        search_button = driver.find_element(
+            By.XPATH, "//div[@class='header-bottom-in']//input[@class='search-button-first-form']"
         )
-    )
+        search_button.click()
 
-    click_element_safely(driver, "(//div[@class='tab-content-wrapper']//div[@class='br-pp-imadds'])[1]//a")
+        WebDriverWait(driver, 3).until(
+            lambda d: d.find_element(
+                By.XPATH, "(//div[@class='tab-content-wrapper']//div[@class='br-pp-imadds'])[1]//a"
+            )
+        )
 
-    time.sleep(3)
-    page_source = driver.page_source
-    driver.quit()
-    return page_source
+        click_element_safely(driver, "(//div[@class='tab-content-wrapper']//div[@class='br-pp-imadds'])[1]//a")
+
+        time.sleep(3)
+
+        yield driver
+    finally:
+        driver.quit()
 
 
 def main() -> None:
-    html_doc = get_page_content()
-    soup = BeautifulSoup(html_doc, 'lxml')
-    char_section = soup.find('div', attrs={'data-section': 'characteristics'})
-
     product = ProductData()
+    with get_page_content() as browser:
+        try:
+            char_section: WebElement | None = browser.find_element(By.XPATH, "//div[@data-section='characteristics']")
+        except NoSuchElementException:
+            char_section = None
 
-    try:
-        # //div[@data-section='top']/h1
-        product.title = soup.find('div', attrs={'data-section': 'top'}).find('h1').text.strip()
-    except AttributeError:
-        pass
+        try:
+            if title := browser.find_element(By.XPATH, "//div[@data-section='top']/h1").get_attribute('textContent'):
+                product.title = title.strip()
+        except NoSuchElementException:
+            pass
 
-    try:
-        product.color = get_char_value(char_section, 'Фізичні характеристики', 'Колір')
-    except AttributeError:
-        pass
+        try:
+            if char_section:
+                if color := get_char_value(char_section, 'Фізичні характеристики', 'Колір'):
+                    product.color = color.strip()
+        except NoSuchElementException:
+            pass
 
-    try:
-        product.ssd = get_char_value(char_section, "Функції пам'яті", "Вбудована пам'ять")
-    except AttributeError:
-        pass
+        try:
+            if char_section:
+                if ssd := get_char_value(char_section, "Функції пам'яті", "Вбудована пам'ять"):
+                    product.ssd = ssd.strip()
+        except NoSuchElementException:
+            pass
 
-    try:
-        product.manufacturer = get_char_value(char_section, 'Інші', 'Виробник')
-    except AttributeError:
-        pass
+        try:
+            if char_section:
+                if manufacturer := get_char_value(char_section, 'Інші', 'Виробник'):
+                    product.manufacturer = manufacturer.strip()
+        except NoSuchElementException:
+            pass
 
-    try:
-        # //div[@class='br-pr-price main-price-block']//div[@class='price-wrapper']/span
-        product.price = int(
-            soup.find('div', class_='br-pr-price main-price-block')
-            .find('div', class_='price-wrapper')
-            .find('span')
-            .text.strip()
-            .replace(' ', '')
-        )
-    except AttributeError:
-        pass
+        try:
+            if price := browser.find_element(
+                By.XPATH, "//div[@class='br-pr-price main-price-block']//div[@class='price-wrapper']/span"
+            ).get_attribute('textContent'):
+                product.price = int(price.strip().replace(' ', ''))
+        except NoSuchElementException:
+            pass
 
-    try:
-        # //div[@class='product-block-bottom']//img
-        images = soup.find('div', class_='product-block-bottom').find_all('img')
-        product.images = [img.get('src') for img in images]  # TODO: select only large size
-    except AttributeError:
-        pass
+        try:
+            images = browser.find_elements(By.XPATH, "//div[@class='product-block-bottom']//img")
+            product.images = [img.get_attribute('src') for img in images]
+        except NoSuchElementException:
+            pass
 
-    try:
-        # //div[@data-section='top']//div[@id='product_code']//span[@class='br-pr-code-val']
-        product.code = (
-            soup.find('div', attrs={'data-section': 'top'})
-            .find('div', id='product_code')
-            .find('span', class_='br-pr-code-val')
-            .text.strip()
-        )
-    except AttributeError:
-        pass
+        try:
+            if code := browser.find_element(
+                By.XPATH, "//div[@data-section='top']//div[@id='product_code']//span[@class='br-pr-code-val']"
+            ).get_attribute('textContent'):
+                product.code = code.strip()
+        except NoSuchElementException:
+            pass
 
-    try:
-        # //div[@id='fast-navigation-block-static']//a[@class='scroll-to-element reviews-count']/span
-        product.num_reviews = int(
-            soup.find('div', id='fast-navigation-block-static')
-            .find('a', class_='scroll-to-element reviews-count')
-            .find('span')
-            .text.strip()
-        )
-    except AttributeError:
-        pass
+        try:
+            if num_reviews := browser.find_element(
+                By.XPATH, "//div[@id='fast-navigation-block-static']//a[@class='scroll-to-element reviews-count']/span"
+            ).get_attribute('textContent'):
+                product.num_reviews = int(num_reviews.strip())
+        except NoSuchElementException:
+            pass
 
-    try:
-        product.screen_diagonal = float(
-            str(get_char_value(char_section, 'Дисплей', 'Діагональ екрану')).replace('"', '')
-        )
-    except AttributeError:
-        pass
+        try:
+            if char_section:
+                if screen_diagonal := get_char_value(char_section, 'Дисплей', 'Діагональ екрану'):
+                    product.screen_diagonal = float(screen_diagonal.strip().replace('"', ''))
+        except NoSuchElementException:
+            pass
 
-    try:
-        product.resolution = str(get_char_value(char_section, 'Дисплей', 'Роздільна здатність екрану')).replace(
-            ' ', ''
-        )  # TODO: maybe separate to list integers: [int, int]
-    except AttributeError:
-        pass
+        try:
+            if char_section:
+                if resolution := get_char_value(char_section, 'Дисплей', 'Роздільна здатність екрану'):
+                    product.resolution = resolution.strip().replace(' ', '')
+        except NoSuchElementException:
+            pass
 
-    try:
-        for item in char_section.find_all('div', class_='br-pr-chr-item'):
-            title = item.find('h3').text.strip()
-            product.characteristics[title] = {}
-            chars = item.find('div').find_all('div')
-            for char in chars:
-                char_name, char_value = char.find_all('span')
-                product.characteristics[title][char_name.text.strip()] = clean_value(char_value.text)
-    except AttributeError:
-        pass
+        if char_section:
+            try:
+                for item in char_section.find_elements(By.XPATH, "//div[@class='br-pr-chr-item']"):
+                    if title := item.find_element(By.TAG_NAME, 'h3').get_attribute('textContent'):
+                        product.characteristics[title.strip()] = {}
+                        chars = item.find_element(By.TAG_NAME, 'div').find_elements(By.TAG_NAME, 'div')
+                        for char in chars:
+                            char_name, char_value = char.find_elements(By.TAG_NAME, 'span')
+                            attr_name = char_name.get_attribute('textContent')
+                            attr_value = char_value.get_attribute('textContent')
+                            if attr_name and attr_value:
+                                product.characteristics[title.strip()][attr_name.strip()] = clean_value(
+                                    attr_value.strip()
+                                )
+            except NoSuchElementException:
+                pass
 
     save_product(product)
 
