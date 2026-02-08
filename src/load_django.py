@@ -3,6 +3,10 @@ import re
 import sys
 from dataclasses import dataclass
 from dataclasses import field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from products.models import Product
 
 
 @dataclass
@@ -32,43 +36,41 @@ def __init_django_project() -> None:
 def __get_or_create_product(data: ProductData):
     from products.models import Product
 
-    product, created = Product.objects.get_or_create(
-        defaults={
-            'title': data.title,
-            'color': data.color,
-            'ssd': data.ssd,
-            'manufacturer': data.manufacturer,
-            'price': data.price,
-            'promo_price': data.promo_price,
-            'code': data.code,
-            'num_reviews': data.num_reviews,
-            'screen_diagonal': data.screen_diagonal,
-            'resolution': data.resolution,
-        },
+    product, _ = Product.objects.get_or_create(
+        title=data.title,
+        color=data.color,
+        ssd=data.ssd,
+        manufacturer=data.manufacturer,
+        price=data.price,
+        promo_price=data.promo_price,
+        code=data.code,
+        num_reviews=data.num_reviews,
+        screen_diagonal=data.screen_diagonal,
+        resolution=data.resolution,
     )
     return product
 
 
-def __save_images(product, image_urls: list) -> None:
+def __save_images(product: Product, image_urls: list[str]) -> None:
     from products.models import ProductImage
 
-    product.images.all().delete()
+    ProductImage.objects.filter(product=product).delete()
     ProductImage.objects.bulk_create([ProductImage(product=product, url=url) for url in image_urls])
 
 
-def __save_characteristics(product, characteristics: dict) -> None:
-    from products.models import Characteristic
-    from products.models import CharacteristicGroup
+def __save_characteristics(product: Product, characteristics: dict) -> None:
+    from products.models import Attribute
+    from products.models import AttributeGroup
+    from products.models import AttributeValue
 
-    product.characteristics.all().delete()
+    values: list[AttributeValue] = []
+    for group_name, attributes in characteristics.items():
+        group, _ = AttributeGroup.objects.get_or_create(name=group_name)
+        for attr_name, attr_value in attributes.items():
+            attribute, _ = Attribute.objects.get_or_create(group=group, name=attr_name)
+            values.append(AttributeValue(attribute=attribute, product=product, value=attr_value))
 
-    char_objects = []
-    for group_name, chars in characteristics.items():
-        group, _ = CharacteristicGroup.objects.get_or_create(name=group_name)
-        for char_name, char_value in chars.items():
-            char_objects.append(Characteristic(group=group, product=product, name=char_name, value=char_value))
-
-    Characteristic.objects.bulk_create(char_objects)
+    AttributeValue.objects.bulk_create(values)
 
 
 def clean_value(value: str) -> str:

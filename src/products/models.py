@@ -1,4 +1,5 @@
 import uuid
+
 from django.db import models
 
 
@@ -34,7 +35,7 @@ class ProductImage(models.Model):
         db_table = 'product_images'
 
 
-class CharacteristicGroup(models.Model):
+class AttributeGroup(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField()
 
@@ -42,18 +43,29 @@ class CharacteristicGroup(models.Model):
         return self.name
 
     class Meta:
-        db_table = 'characteristic_groups'
+        db_table = 'attribute_groups'
 
 
-class Characteristic(models.Model):
+class Attribute(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    group = models.ForeignKey(CharacteristicGroup, related_name='characteristics', on_delete=models.CASCADE)
-    product = models.ForeignKey(Product, related_name='characteristics', on_delete=models.CASCADE)
+    group = models.ForeignKey(AttributeGroup, related_name='attributes', on_delete=models.CASCADE)
     name = models.CharField()
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = 'attributes'
+
+
+class AttributeValue(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    attribute = models.ForeignKey(Attribute, related_name='values', on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, related_name='attributes', on_delete=models.CASCADE)
     value = models.CharField()
 
     def __str__(self):
-        return '%s: %s' % (self.name, self.value)
+        return '%s: %s' % (self.attribute.name, self.value)
 
     class Meta:
-        db_table = 'characteristics'
+        db_table = 'attribute_values'
